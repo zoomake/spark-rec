@@ -45,7 +45,7 @@ object moviesALS {
       .map(x => (x, movies(x)))
       .toSeq
 
-    val myRatings = elicitateRatings(selectedMovies)  //对热门电影进行评分AA
+    val myRatings = elicitateRatings(selectedMovies)  //对热门电影进行评分
     val myRatingsRDD = sc.parallelize(myRatings, 1)
     val numPartitions = 20
 
