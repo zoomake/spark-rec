@@ -7,7 +7,7 @@ import org.apache.spark.sql.SparkSession
 
 import scala.util.Random
 
-object moviesALS {
+object ALSBatchRecommender {
 
   def parseRating(str: String): (Long, Rating) = {
     val fields = str.split("::")
