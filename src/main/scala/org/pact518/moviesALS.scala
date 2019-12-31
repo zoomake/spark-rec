@@ -10,20 +10,20 @@ import scala.util.Random
 object moviesALS {
 
   def parseRating(str: String): (Long, Rating) = {
-    val fields = str.split(",")
+    val fields = str.split("::")
     assert(fields.size == 4)
     (fields(3).toLong % 10, Rating(fields(0).toInt, fields(1).toInt, fields(2).toFloat))
   }
 
   def main(args: Array[String]): Unit = {
-    val dir = "C:\\Users\\chinaso\\Desktop\\movielens\\ml-20m"
+    val dir = "C:\\Users\\chinaso\\Desktop\\ml-1m"
     val conf = new SparkConf().setAppName("ALSReco").setMaster("local")
     val spark = SparkSession.builder.config(conf).getOrCreate
     val sc = spark.sparkContext
-    val ratings = sc.textFile(dir + "\\ratings.csv").map(parseRating)
-    val movies = sc.textFile(dir + "\\movies.csv").map {
+    val ratings = sc.textFile(dir + "\\ratings.dat").map(parseRating)
+    val movies = sc.textFile(dir + "\\movies.dat").map {
       line =>
-        val fields = line.split(",")
+        val fields = line.split("::")
         (fields(0).toInt, fields(1))
     }.collect().toMap
 
@@ -94,13 +94,23 @@ object moviesALS {
       }
     }
 
+//    val predictions : RDD[Rating] = bestModel.get.predict(test.map(x => (x.user, x.product)))
+//    val s = test.map(x => ((x.user, x.product), x.rating))
+//    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
+//      .join(s)    //得到 ((user1,product1),(p_rating, d_rating))
+//      .values     //返回所有的(p_rating, d_rating)
+//    val p = predictionsAndRatings.collect().sortBy(-_._1).take(100)
+//    for(i <- 0 to p.length -1){
+//      println(p(i))
+//    }
+
     //在测试集上评估得到的最佳模型
     val testRmse = computeRmse(bestModel.get, test, numTest)
-    println("testRmse：" + testRmse)
+    println("Rmse：" + testRmse)
 
-    //设置朴素基线并与最佳模型比较
+    //设置朴素基线并与最佳模型比较  mean求均值
     val maenRating = training.union(validation).map(_.rating).mean
-    val bestlineRmse = math.sqrt(test.map(x => (maenRating - x.rating) * (maenRating - x.rating)).reduce(_+_)/numTest)
+    val bestlineRmse = math.sqrt(test.map(x => (maenRating - x.rating) * (maenRating - x.rating)).reduce(_+_) / numTest)
     val improvement = (bestlineRmse - testRmse) / bestlineRmse * 100
     println("improvement:" + "%1.2f".format(improvement))
 
@@ -118,17 +128,20 @@ object moviesALS {
     sc.stop()
   }
 
+  /**
+   * @param movies  需要评分的电影
+   * @return
+   */
   def elicitateRatings(movies: Seq[(Int, String)]) = {
-    //    println("Please input:")
     val ratings = movies.flatMap { x =>
       var rating: Option[Rating] = None
       var valid = false
       while (!valid) {
-        println(x._2 + ":")
+        print(x._2 + ":")
         try {
           val r = Console.readFloat()
           if (r < 0 || r > 5) {
-            println("anew")
+            println("rating should 0 < x < 5")
           } else {
             valid = true
             if (r > 0) {
@@ -151,15 +164,19 @@ object moviesALS {
     }
   }
 
+  /**
+   * @param model 推荐模型
+   * @param data  测试RDD
+   * @param n     数量
+   * @return
+   * Rmse(均方根误差):先平方、再平均、然后开方，衡量观测值与真实值之间的偏差。
+   */
   def computeRmse(model: MatrixFactorizationModel, data:RDD[Rating], n:Long) = {
     val predictions : RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))
-    data.foreach{d => println(d.user + "===" + d.product + "===" + d.rating)}
-    println("==============baixianghui============")
-    predictions.foreach{p => println(p.user + "===" + p.product + "===" + p.rating)}
     val s = data.map(x => ((x.user, x.product), x.rating))
     val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))
-      .join(s)
-      .values
-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)
+      .join(s)    //得到 ((user1,product1),(p_rating, d_rating))
+      .values     //返回所有的(p_rating, d_rating)
+    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)  //reduceLeft和reduceRight  从头或者尾对元素进行制定操作
   }
 }
