@@ -53,7 +53,7 @@ object ALSBatchRecommender {
       .values
       .union(myRatingsRDD)
       .repartition(numPartitions)
-      .persist
+      .persist  //对RDD持久化
 
     val validation = ratings.filter(x => x._1 >= 6 && x._1 < 8)
       .values
